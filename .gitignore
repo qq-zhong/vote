@@ -1,5 +1,5 @@
 server_spaget.js
 node_modules/
 package-lock.json
-.DS_Store  # MacOS specific
-.env       # If you have environment variables
+.DS_Store 
+.env      
