@@ -1,0 +1,2 @@
+body { font-family: Arial, sans-serif; }
+#messages { max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; }
