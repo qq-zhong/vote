@@ -9,6 +9,9 @@ const messagesDiv = document.getElementById("messages");
 let countdownInterval = null; // Store interval ID for countdown
 let userID = getCookie("userID");
 
+let selectedChoice = null; // Store selected choice
+let selectionIndicator = null; // Image to highlight selection
+
 
 ws.onopen = () => {
     console.log("Connected to WebSocket server.");
@@ -119,18 +122,21 @@ function startCountdown(seconds) {
 
 
 function updateButtons(choices) {
-    const container = document.getElementById("buttons-container");
     const countdownElement = document.getElementById("countdown");
-    container.innerHTML = ""; // Clear existing buttons
     countdownElement.innerHTML = "";
 
+    const container = document.getElementById("buttons-container");
+    container.innerHTML = ""; // Clear existing buttons
+
+    // Create buttons
     choices.forEach(choice => {
-        if (choice.enabled && choice.label) { // Only create buttons for enabled choices with labels
+        if (choice.enabled && choice.label) {
             const button = document.createElement("button");
             button.textContent = choice.label;
             button.classList.add("choice-btn");
 
-            button.onclick = () => sendChoice(choice.label);
+            // Click event for selecting
+            button.onclick = () => selectChoice(button, choice.label);
 
             container.appendChild(button);
         }
@@ -138,11 +144,33 @@ function updateButtons(choices) {
 }
 
 
-function sendChoice(choiceLabel) {
+function selectChoice(button, choiceLabel) {
+    selectedChoice = choiceLabel; // Update selected choice
+    console.log(`Selected: ${choiceLabel}`);
+
+    // If indicator doesn't exist, create it
+    if (!selectionIndicator) {
+        selectionIndicator = document.createElement("img");
+        selectionIndicator.src = "checkmark.png"; // Use any checkmark or highlight image
+        selectionIndicator.classList.add("selection-indicator");
+        document.body.appendChild(selectionIndicator);
+    }
+
+    // Position the indicator next to the selected button
+    button.style.position = "relative";
+    selectionIndicator.style.top = `${button.offsetTop}px`;
+    selectionIndicator.style.left = `${button.offsetLeft - 40}px`;
+
+    // Show the "Vote" button
+    document.getElementById("vote-btn").style.display = "block";
+}
+
+
+function sendChoice() {
     const container = document.getElementById("buttons-container");
     if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "vote", choice: choiceLabel }));
-        console.log(`Sent choice: ${choiceLabel}`);
+        ws.send(JSON.stringify({ type: "vote", choice: selectedChoice }));
+        console.log(`Sent choice: ${selectedChoice}`);
         container.innerHTML = "Thank you for voting!"; // Clear existing buttons
     } else {
         console.error("WebSocket is not open.");

@@ -1,2 +1,72 @@
 body { font-family: Arial, sans-serif; }
 #messages { max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; }
+
+/* Center the buttons container */
+#buttons-container {
+    display: flex;
+    flex-direction: column; /* Stack buttons in a vertical column */
+    align-items: center; /* Center horizontally */
+    justify-content: center; /* Center vertically */
+    height: 100vh; /* Take full viewport height */
+    width: 100%; /* Full width */
+}
+
+/* Style individual buttons */
+.choice-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 15px 20px;
+    font-size: 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s;
+    width: 80%; /* Make buttons wider for better touch usability */
+    max-width: 300px; /* Prevent buttons from being too wide */
+    text-align: center;
+    margin: 10px 0; /* Space between buttons */
+}
+
+/* Hover effect */
+.choice-btn:hover {
+    background-color: #0056b3;
+}
+
+@keyframes wiggle {
+    0% { transform: rotate(-5deg); }
+    100% { transform: rotate(5deg); }
+}
+
+
+.selection-indicator {
+    width: 25px;
+    height: 25px;
+    position: absolute;
+    left: -35px; /* Move left of button */
+    animation: wiggle 0.5s infinite alternate; /* Wiggle effect */
+}
+
+#vote-btn {
+    display: none;
+    margin-top: 20px;
+    background-color: #28a745;
+    color: white;
+    padding: 15px 20px;
+    font-size: 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+#vote-btn:hover {
+    background-color: #218838;
+}
+
+
+/* Ensure buttons stack properly on mobile */
+@media (max-width: 600px) {
+    .choice-btn {
+        width: 90%; /* Slightly wider buttons on smaller screens */
+    }
+}
