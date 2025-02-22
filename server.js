@@ -173,8 +173,13 @@ function handleMessage(ws, data, userID) {
         case 'ping':
             ws.send(JSON.stringify({ type: 'pong' })); // Send back pong
             break
+
+        case 'stop_vote':
+            ws.send(JSON.stringify({ type: 'stop_vote' }));
+            break
+
         default: // this is the admin page data insert option
-            saveAndBroadcastMessage(msg);
+            // saveAndBroadcastMessage(msg);
             break;
     }
 }
