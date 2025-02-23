@@ -12,6 +12,8 @@ let userID = getCookie("userID");
 let selectedChoice = null; // Store selected choice
 let selectionIndicator = null; // Image to highlight selection
 
+let voting = false;
+
 
 ws.onopen = () => {
     console.log("Connected to WebSocket server.");
@@ -41,7 +43,15 @@ ws.onmessage = (event) => {
     if (msg.system && msg.userID) {
         userID = msg.userID;
         setCookie("userID", userID, 30);
-        document.getElementById("user-id").textContent = "Your User ID: " + userID;
+        // document.getElementById("user-id").textContent = "Your User ID: " + userID;
+    }
+
+    if (msg.type == "state_update" && msg.state == "voting"){
+        voting = true;
+        if (msg.voted){
+            const container = document.getElementById("buttons-container");
+            container.innerHTML = "Thank You for Voting!"
+        } 
     }
 
     if (msg.type === "pong") {
@@ -58,6 +68,7 @@ ws.onmessage = (event) => {
     // Handle voting alert and start countdown
     if (msg.type === "alert" && msg.remainingTime) {
         startCountdown(msg.remainingTime);
+        voting = true;
     }
 
     if (msg.type === "state_update" && msg.remainingTime) {
@@ -66,9 +77,10 @@ ws.onmessage = (event) => {
 
     if (msg.type === "send_results") {
         updateResults(msg.result);
+        voting = false;
     }
 
-
+    
 };
 
 function startPingPong() {
@@ -88,6 +100,9 @@ function startPingPong() {
 
 function updateResults(results) {
     const resultsText = document.getElementById("countdown");
+    const buttons_container = document.getElementById("buttons-container");
+    buttons_container.innerHTML = ""
+
 
     if (results.length === 0) {
         resultsText.textContent = "No results yet.";
@@ -151,22 +166,32 @@ function selectChoice(button, choiceLabel) {
     // If indicator doesn't exist, create it
     if (!selectionIndicator) {
         selectionIndicator = document.createElement("img");
-        selectionIndicator.src = "checkmark.png"; // Use any checkmark or highlight image
+        selectionIndicator.src = "pr.png"; // Use any checkmark or highlight image
         selectionIndicator.classList.add("selection-indicator");
+        selectionIndicator.setAttribute("id", "pointer");
         document.body.appendChild(selectionIndicator);
+        
+    } else {
+        document.getElementById("pointer").style.display = "block";
     }
 
+    if (voting){
+
+        document.getElementById("vote-btn").style.display = "block";
+    }
     // Position the indicator next to the selected button
     button.style.position = "relative";
-    selectionIndicator.style.top = `${button.offsetTop}px`;
+    selectionIndicator.style.top = `${button.offsetTop + 35}px`;
     selectionIndicator.style.left = `${button.offsetLeft - 40}px`;
 
     // Show the "Vote" button
-    document.getElementById("vote-btn").style.display = "block";
 }
 
 
 function sendChoice() {
+    document.getElementById("vote-btn").style.display = "none";
+    document.getElementById("pointer").style.display = "none";
+
     const container = document.getElementById("buttons-container");
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "vote", choice: selectedChoice }));
