@@ -13,7 +13,8 @@ let selectedChoice = null; // Store selected choice
 let selectionIndicator = null; // Image to highlight selection
 
 let voting = false;
-
+let state = "idle";
+let voted = false;
 
 ws.onopen = () => {
     console.log("Connected to WebSocket server.");
@@ -46,13 +47,23 @@ ws.onmessage = (event) => {
         // document.getElementById("user-id").textContent = "Your User ID: " + userID;
     }
 
-    if (msg.type == "state_update" && msg.state == "voting"){
-        voting = true;
-        if (msg.voted){
-            const container = document.getElementById("buttons-container");
-            container.innerHTML = "Thank You for Voting!"
-        } 
+    if (msg.type == "state_update"){
+        state = msg.state
+        if (msg.state == 'idle'){
+            voted = false;
+        }
+        if (msg.state == "voting"){
+            voting = true;
+            // voted = false;
+            if (msg.voted){
+                console.log("apparently i voted")
+                voted = true;
+                const container = document.getElementById("buttons-container");
+                container.innerHTML = "Thank You for Voting!"
+            } 
+        }
     }
+
 
     if (msg.type === "pong") {
         console.log("Pong received!");
@@ -61,8 +72,14 @@ ws.onmessage = (event) => {
 
     // Log received enabled fields when update_choices message is received
     if (msg.type === "update_choices" && msg.choices) {
-        console.log("Received enabled choices:", msg.choices);
-        updateButtons(msg.choices);
+        if (state != "result"){ // while voting, if not voted, update buttons, while result don't update button
+            // if msg.
+            console.log("Received enabled choices:", msg.choices);
+            console.log("voted is " ,voted);
+            if (!voted){
+                updateButtons(msg.choices);
+            }
+        }
     }
 
     // Handle voting alert and start countdown
