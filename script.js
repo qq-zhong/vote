@@ -10,9 +10,11 @@ let countdownInterval = null; // Store interval ID for countdown
 let userID = getCookie("userID");
 
 let selectedChoice = null; // Store selected choice
+let selectedButton = null;
 let selectionIndicator = null; // Image to highlight selection
 
 let voting = false;
+
 let state = "idle";
 let voted = false;
 
@@ -21,6 +23,17 @@ ws.onopen = () => {
     startPingPong();
 };
 
+// done: when vote start, if user has an option selected, show button
+
+// done: no timer when connecting in the middle of vote, fixed
+// observation: when connecting in the middle of vote, i'm receiving 2 state updates, one without remaining time
+// also receiving 2 update_choices calls when connecting admist vote
+
+// make result look good
+//                 result, idle , voting
+// selectedChoice: null  , enabled , enabled
+
+// half-done: fix hand position when voting (better but not perfect)
 
 
 ws.onclose = () => {
@@ -60,7 +73,12 @@ ws.onmessage = (event) => {
                 voted = true;
                 const container = document.getElementById("buttons-container");
                 container.innerHTML = "Thank You for Voting!"
-            } 
+            }  else {
+                if (selectedChoice != null && !voted){
+                    console.log("we reached the desired blocks")
+                    document.getElementById("vote-btn").style.display = "block";
+                }
+            }
         }
     }
 
@@ -83,16 +101,31 @@ ws.onmessage = (event) => {
     }
 
     // Handle voting alert and start countdown
-    if (msg.type === "alert" && msg.remainingTime) {
+    if (msg.type === "alert" && msg.remainingTime) { // voting
+        if (selectedChoice != null && !voted){
+            console.log("we reached the desired blocks")
+            document.getElementById("vote-btn").style.display = "block";
+            selectionIndicator.style.top = `${selectedButton.offsetTop + 35}px`;
+            selectionIndicator.style.left = `${selectedButton.offsetLeft - 40}px`; // when vote is called, no state update just this
+        }
+        console.log("voting1")
         startCountdown(msg.remainingTime);
         voting = true;
     }
 
-    if (msg.type === "state_update" && msg.remainingTime) {
+    if (msg.type === "state_update" && msg.remainingTime) { //displays timer when connecting during vote
+        console.log("voting2")
         startCountdown(msg.remainingTime);
     }
 
     if (msg.type === "send_results") {
+        document.getElementById("vote-btn").style.display = "none";
+        // document.getElementById("pointer").style.display = "none";
+        if (selectionIndicator){
+            selectionIndicator.style.display = "none";
+        }
+        selectedChoice = null;
+        selectedButton = null;
         updateResults(msg.result);
         voting = false;
     }
@@ -178,6 +211,7 @@ function updateButtons(choices) {
 
 function selectChoice(button, choiceLabel) {
     selectedChoice = choiceLabel; // Update selected choice
+    selectedButton = button;
     console.log(`Selected: ${choiceLabel}`);
 
     // If indicator doesn't exist, create it
