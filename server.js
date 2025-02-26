@@ -101,24 +101,17 @@ wss.on("connection", (ws, req) => {
     
     if (cookie != null && cookie != ""){ //cookie exists <- this refers to admin page only
         console.log("cookie isn't null, it's ", cookie)
-        console.log(cookie);
+        //console.log(cookie);
         userID = cookie;
     } else {
         userID = getUserID(req);
     }
     // console.log("cookie is null");
     ws.send(JSON.stringify({ system: true, userID }));
+    userID = String(userID) //important, getUserId returns a number
 
     onClientConnected(ws, userID);
-    if (!votedUsers.has(userID)){
-
-        sendChoicesToUser(ws);
-    } else {
-        // todo: user has voted, vote ongoing
-        if (serverState == "result"){
-            ws.send(JSON.stringify({type: "send_results", result: lastResult}))
-        }
-    }
+    
 
     ws.on("message", (data) => handleMessage(ws, data, userID));
     ws.on("close", () => console.log("Client disconnected"));
@@ -275,7 +268,7 @@ function updateChoices(choices) {
     });
 }
 
-function sendAlert(message) {
+function sendAlert(message) { //todo: fix potential multi triggers
     serverState = "voting";
     // broadcast({ type: 'alert', message });
     console.log("Server state changed to 'voting'");
@@ -301,10 +294,11 @@ function onClientConnected(client, id) {
     // If voting is active, send remaining time
     if (serverState === "voting" && votingStartTime) {
 
-        if (!votedUsers.has(id)){
-
+        if (!votedUsers.has(id)){ // user not voted
+            console.log("votedUsers are :", votedUsers)
             let elapsedTime = Date.now() - votingStartTime;
             let remainingTime = Math.max(0, (VOTING_DURATION - elapsedTime) / 1000); // Convert ms to seconds
+
             
             client.send(JSON.stringify({
                 type: "state_update",
@@ -312,13 +306,29 @@ function onClientConnected(client, id) {
                 remainingTime: remainingTime
             }));
             
+            console.log("user not voted, sending over choices")
+            sendChoicesToUser(client);
             console.log(`Sent remaining time: ${remainingTime} seconds`);
         } else {
             //todo: is in voted user, what happens?
+            console.log("from else, votedUsers are :", votedUsers)
+            client.send(JSON.stringify({
+                type: "state_update",
+                state: "voting",
+                voted : true
+            }));
         }
-    } else {
+    } 
+    if (serverState == "result"){ // result or idle states
         // Send current state to the new client
         client.send(JSON.stringify({ type: "state_update", state: serverState }));
+        client.send(JSON.stringify({type: "send_results", result: lastResult}))
+        sendChoicesToUser(client);
+    } 
+    if (serverState == "idle"){
+         //idle state
+        client.send(JSON.stringify({ type: "state_update", state: serverState }));
+        sendChoicesToUser(client);
     }
 }
 
