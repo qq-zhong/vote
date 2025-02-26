@@ -10,14 +10,30 @@ let countdownInterval = null; // Store interval ID for countdown
 let userID = getCookie("userID");
 
 let selectedChoice = null; // Store selected choice
+let selectedButton = null;
 let selectionIndicator = null; // Image to highlight selection
 
+let voting = false;
+
+let state = "idle";
+let voted = false;
 
 ws.onopen = () => {
     console.log("Connected to WebSocket server.");
     startPingPong();
 };
 
+// done: when vote start, if user has an option selected, show button
+
+// done: no timer when connecting in the middle of vote, fixed
+// observation: when connecting in the middle of vote, i'm receiving 2 state updates, one without remaining time
+// also receiving 2 update_choices calls when connecting admist vote
+
+// make result look good
+//                 result, idle , voting
+// selectedChoice: null  , enabled , enabled
+
+// half-done: fix hand position when voting (better but not perfect)
 
 
 ws.onclose = () => {
@@ -41,8 +57,31 @@ ws.onmessage = (event) => {
     if (msg.system && msg.userID) {
         userID = msg.userID;
         setCookie("userID", userID, 30);
-        document.getElementById("user-id").textContent = "Your User ID: " + userID;
+        // document.getElementById("user-id").textContent = "Your User ID: " + userID;
     }
+
+    if (msg.type == "state_update"){
+        state = msg.state
+        if (msg.state == 'idle'){
+            voted = false;
+        }
+        if (msg.state == "voting"){
+            voting = true;
+            // voted = false;
+            if (msg.voted){
+                console.log("apparently i voted")
+                voted = true;
+                const container = document.getElementById("buttons-container");
+                container.innerHTML = "Thank You for Voting!"
+            }  else {
+                if (selectedChoice != null && !voted){
+                    console.log("we reached the desired blocks")
+                    document.getElementById("vote-btn").style.display = "block";
+                }
+            }
+        }
+    }
+
 
     if (msg.type === "pong") {
         console.log("Pong received!");
@@ -51,24 +90,47 @@ ws.onmessage = (event) => {
 
     // Log received enabled fields when update_choices message is received
     if (msg.type === "update_choices" && msg.choices) {
-        console.log("Received enabled choices:", msg.choices);
-        updateButtons(msg.choices);
+        if (state != "result"){ // while voting, if not voted, update buttons, while result don't update button
+            // if msg.
+            console.log("Received enabled choices:", msg.choices);
+            console.log("voted is " ,voted);
+            if (!voted){
+                updateButtons(msg.choices);
+            }
+        }
     }
 
     // Handle voting alert and start countdown
-    if (msg.type === "alert" && msg.remainingTime) {
+    if (msg.type === "alert" && msg.remainingTime) { // voting
+        if (selectedChoice != null && !voted){
+            console.log("we reached the desired blocks")
+            document.getElementById("vote-btn").style.display = "block";
+            selectionIndicator.style.top = `${selectedButton.offsetTop + 35}px`;
+            selectionIndicator.style.left = `${selectedButton.offsetLeft - 40}px`; // when vote is called, no state update just this
+        }
+        console.log("voting1")
         startCountdown(msg.remainingTime);
+        voting = true;
     }
 
-    if (msg.type === "state_update" && msg.remainingTime) {
+    if (msg.type === "state_update" && msg.remainingTime) { //displays timer when connecting during vote
+        console.log("voting2")
         startCountdown(msg.remainingTime);
     }
 
     if (msg.type === "send_results") {
+        document.getElementById("vote-btn").style.display = "none";
+        // document.getElementById("pointer").style.display = "none";
+        if (selectionIndicator){
+            selectionIndicator.style.display = "none";
+        }
+        selectedChoice = null;
+        selectedButton = null;
         updateResults(msg.result);
+        voting = false;
     }
 
-
+    
 };
 
 function startPingPong() {
@@ -88,6 +150,9 @@ function startPingPong() {
 
 function updateResults(results) {
     const resultsText = document.getElementById("countdown");
+    const buttons_container = document.getElementById("buttons-container");
+    buttons_container.innerHTML = ""
+
 
     if (results.length === 0) {
         resultsText.textContent = "No results yet.";
@@ -146,27 +211,38 @@ function updateButtons(choices) {
 
 function selectChoice(button, choiceLabel) {
     selectedChoice = choiceLabel; // Update selected choice
+    selectedButton = button;
     console.log(`Selected: ${choiceLabel}`);
 
     // If indicator doesn't exist, create it
     if (!selectionIndicator) {
         selectionIndicator = document.createElement("img");
-        selectionIndicator.src = "checkmark.png"; // Use any checkmark or highlight image
+        selectionIndicator.src = "pr.png"; // Use any checkmark or highlight image
         selectionIndicator.classList.add("selection-indicator");
+        selectionIndicator.setAttribute("id", "pointer");
         document.body.appendChild(selectionIndicator);
+        
+    } else {
+        document.getElementById("pointer").style.display = "block";
     }
 
+    if (voting){
+
+        document.getElementById("vote-btn").style.display = "block";
+    }
     // Position the indicator next to the selected button
     button.style.position = "relative";
-    selectionIndicator.style.top = `${button.offsetTop}px`;
+    selectionIndicator.style.top = `${button.offsetTop + 35}px`;
     selectionIndicator.style.left = `${button.offsetLeft - 40}px`;
 
     // Show the "Vote" button
-    document.getElementById("vote-btn").style.display = "block";
 }
 
 
 function sendChoice() {
+    document.getElementById("vote-btn").style.display = "none";
+    document.getElementById("pointer").style.display = "none";
+
     const container = document.getElementById("buttons-container");
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "vote", choice: selectedChoice }));
