@@ -33,11 +33,14 @@ ws.onopen = () => {
 // observation: when connecting in the middle of vote, i'm receiving 2 state updates, one without remaining time
 // also receiving 2 update_choices calls when connecting admist vote
 
-// todo : make result look good
+// done : make result look good
 //                 result, idle , voting
 // selectedChoice: null  , enabled , enabled
 
 // half-done: fix hand position when voting (better but not perfect)
+// todo: when times up and user has not voted, clear selection indicator and vote btn
+// weird glitch where if use refreshes admist inf time vote, a timer is sent,
+// but if they refresh again after timer runs out, no timer shows
 
 
 ws.onclose = () => {
@@ -78,8 +81,8 @@ ws.onmessage = (event) => {
                 const container = document.getElementById("buttons-container");
                 container.innerHTML = "Thank You for Voting!"
             }  else {
-                if (selectedChoice != null && !voted){
-                    console.log("we reached the desired blocks")
+                if (selectedChoice != null && !voted){ // shows the vote btn
+                    // console.log("we reached the desired blocks")
                     document.getElementById("vote-btn").style.display = "block";
                 }
             }
@@ -105,7 +108,7 @@ ws.onmessage = (event) => {
     }
 
     // Handle voting alert and start countdown
-    if (msg.type === "alert" && msg.remainingTime) { // voting
+    if (msg.type === "alert") { // voting
         if (selectedChoice != null && !voted){
             console.log("we reached the desired blocks")
             document.getElementById("vote-btn").style.display = "block";
@@ -113,22 +116,35 @@ ws.onmessage = (event) => {
             selectionIndicator.style.left = `${selectedButton.offsetLeft - 40}px`; // when vote is called, no state update just this
         }
         console.log("voting1")
-        startCountdown(msg.remainingTime);
+        if (msg.remainingTime != ''){ // with countdown
+
+            startCountdown(msg.remainingTime);
+        } else {// no countdow
+
+        }
         voting = true;
     }
+
 
     if (msg.type === "state_update" && msg.remainingTime) { //displays timer when connecting during vote
         console.log("voting2")
         startCountdown(msg.remainingTime);
     }
 
+    if (msg.type == "stop_vote"){
+        console.log("vote stopped by admin")
+        console.log('voting has ended');
+            // countdownElement.textContent = "Voting has ended.";
+        document.getElementById("buttons-container").innerHTML = ""; // potential issue of this erasing the winning buttons
+    }
+
     if (msg.type === "send_results") { // show results
 
-
-        
         updateResults(msg.result);
         voting = false;
     }
+
+    
 
     
 };
@@ -244,6 +260,10 @@ function startCountdown(seconds) {
             console.log('voting has ended');
             // countdownElement.textContent = "Voting has ended.";
             document.getElementById("buttons-container").innerHTML = ""; // potential issue of this erasing the winning buttons
+            document.getElementById("vote-btn").style.display = "none";
+            if (selectionIndicator){
+                selectionIndicator.style.display = "none";
+            }
         }
     }, 1000);
 }
@@ -314,7 +334,7 @@ function sendChoice() {
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "vote", choice: selectedChoice }));
         console.log(`Sent choice: ${selectedChoice}`);
-        container.innerHTML = "Thank you for voting!"; // Clear existing buttons
+        container.innerHTML = "Thank You for Voting!"; // Clear existing buttons
     } else {
         console.error("WebSocket is not open.");
     }
