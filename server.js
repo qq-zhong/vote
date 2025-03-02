@@ -14,7 +14,9 @@ const server = https.createServer({
 let serverState = 'idle';
 let votingStartTime = null; // Store voting start timestamp
 let lastResult = null;
-const VOTING_DURATION = 30000; // 30 seconds
+var VOTING_DURATION = 31000; // 31 seconds, users get 1 less second
+let votingTimeout = null; // Global variable to store setTimeout ID
+
 
 
 // MySQL Connection
@@ -151,15 +153,27 @@ function handleMessage(ws, data, userID) {
             break;
         case 'alert': //alert used to be the vote call
             clearVotes();
+            if (msg.time == ''){
+                console.log("time should be infinite")
+            } else {
+
+                console.log("time should be ",msg.time);
+            }
             votedUsers.clear();
-            sendAlert(msg.message);
+            sendAlert(msg.message, msg.time);
             break;
 
         case 'vote':
             userVote(msg.choice, userID);
             break;
 
-        case 'send_results':
+        case 'send_results': // this option doesn't happen
+            console.log("voting time out is ", votingTimeout);
+            // if (votingTimeout) {
+            //     clearTimeout(votingTimeout);
+            //     votingTimeout = null; // Reset the variable
+            //     console.log("Voting timeout canceled.");
+            // }
             showResults();
             break;
 
@@ -168,13 +182,25 @@ function handleMessage(ws, data, userID) {
             break
 
         case 'stop_vote':
-            ws.send(JSON.stringify({ type: 'stop_vote' }));
+            console.log("sending stop_vote")
+            if (votingTimeout) {
+                clearTimeout(votingTimeout);
+                votingTimeout = null; // Reset the variable
+                console.log("Voting timeout canceled.");
+            }
+            stopVote();
+            // ws.send(JSON.stringify({ type: 'stop_vote' }));
             break
 
         default: // this is the admin page data insert option
             // saveAndBroadcastMessage(msg);
             break;
     }
+}
+
+function stopVote(){
+    broadcast({ type: 'stop_vote' });
+    result_body();
 }
 
 function userVote(choice, id){
@@ -202,7 +228,7 @@ function userVote(choice, id){
 
         // Check if the vote was inserted (affectedRows > 0 means vote was allowed)
         if (results.affectedRows > 0) {
-            console.log(`User ${id} voted for ${choice}`);
+            console.log(`User ${id}al voted for ${choice}`);
 
             // Now insert into voted_users table
             db.query("INSERT INTO voted_user (user_id) VALUES (?)", [id], (err) => {
@@ -268,23 +294,37 @@ function updateChoices(choices) {
     });
 }
 
-function sendAlert(message) { //todo: fix potential multi triggers
+function sendAlert(message, time) {
     serverState = "voting";
     // broadcast({ type: 'alert', message });
     console.log("Server state changed to 'voting'");
 
     votingStartTime = Date.now(); // Record voting start time
-    broadcast({ type: 'alert', message, state: "voting", remainingTime: VOTING_DURATION / 1000 });
+    VOTING_DURATION = time;
+    if (time == ''){
+        broadcast({ type: 'alert', message, state: "voting" , remainingTime : VOTING_DURATION}); // users need a '' remaining time check
 
-    // Start a 30-second timer before switching to 'result' state
-    setTimeout(() => {
-        serverState = "result";
-        votingStartTime = null; // Clear the timestamp
-        broadcast({ type: 'state_update', state: "result" });
-        console.log("Server state changed to 'result'");
-        showResults();
 
-    }, VOTING_DURATION); // 30 seconds
+    } else{
+        VOTING_DURATION = time * 1000;
+        broadcast({ type: 'alert', message, state: "voting", remainingTime: VOTING_DURATION / 1000 - 1 }); // USERS ALWAYS FINISH BEFORE SERVER, FOR TIMING PURPOSES
+    
+        // Start a 30-second timer before switching to 'result' state
+        votingTimeout = setTimeout(() => {
+            result_body();
+    
+        }, VOTING_DURATION); // 30 seconds
+    }
+    
+}
+
+function result_body(){
+    serverState = "result";
+    votingStartTime = null; // Clear the timestamp
+    broadcast({ type: 'state_update', state: "result" });
+    console.log("Server state changed to 'result'");
+    showResults();
+    votingTimeout = null;
 }
 
 function onClientConnected(client, id) {
@@ -294,10 +334,19 @@ function onClientConnected(client, id) {
     // If voting is active, send remaining time
     if (serverState === "voting" && votingStartTime) {
 
-        if (!votedUsers.has(id)){ // user not voted
+        if (!votedUsers.has(id)){ // user not voted, jsut connected during vote
             console.log("votedUsers are :", votedUsers)
             let elapsedTime = Date.now() - votingStartTime;
-            let remainingTime = Math.max(0, (VOTING_DURATION - elapsedTime) / 1000); // Convert ms to seconds
+
+            //done: if user conects admist endlessvote,send ''
+            let remainingTime = null;
+            
+            if (VOTING_DURATION != ''){
+
+                remainingTime = Math.max(0, (VOTING_DURATION - elapsedTime) / 1000); // Convert ms to seconds 
+            } else {
+                remainingTime = '';
+            }
 
             
             client.send(JSON.stringify({
@@ -306,11 +355,10 @@ function onClientConnected(client, id) {
                 remainingTime: remainingTime
             }));
             
-            console.log("user not voted, sending over choices")
+            console.log("user not voted, sending over choices") 
             sendChoicesToUser(client);
             console.log(`Sent remaining time: ${remainingTime} seconds`);
         } else {
-            //todo: is in voted user, what happens?
             console.log("from else, votedUsers are :", votedUsers)
             client.send(JSON.stringify({
                 type: "state_update",
@@ -339,7 +387,6 @@ function showResults(){
         SELECT choice, COUNT(*) as count 
         FROM votes 
         GROUP BY choice
-        ORDER BY count DESC
     `;
 
     db.query(sql, (err, results) => {
