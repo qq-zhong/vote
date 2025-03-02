@@ -19,6 +19,7 @@ document.body.appendChild(crown);
 
 let voting = false;
 
+
 let state = "idle";
 let voted = false;
 
@@ -125,6 +126,17 @@ ws.onmessage = (event) => {
         voting = true;
     }
 
+    // if (msg.remainingTime){
+    //     console.log("remaing time is", msg.remainingTime);
+    //     if (msg.remainingTime){
+    //         console.log("inner if loop is true");
+    //     } else {
+    //         console.log("inner if loop is false");
+    //     }
+    // }
+
+    //todo: if receiving stop vote, stop timer
+
 
     if (msg.type === "state_update" && msg.remainingTime) { //displays timer when connecting during vote
         console.log("voting2")
@@ -140,6 +152,10 @@ ws.onmessage = (event) => {
 
     if (msg.type === "send_results") { // show results
 
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            // console.log("Countdown stopped externally.");
+        }
         updateResults(msg.result);
         voting = false;
     }
