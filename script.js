@@ -12,8 +12,13 @@ let userID = getCookie("userID");
 let selectedChoice = null; // Store selected choice
 let selectedButton = null;
 let selectionIndicator = null; // Image to highlight selection
+const crown = document.createElement("img");
+crown.src = "crown.png"; // Use any checkmark or highlight image
+crown.setAttribute("id", 'winner');
+document.body.appendChild(crown);
 
 let voting = false;
+
 
 let state = "idle";
 let voted = false;
@@ -29,11 +34,14 @@ ws.onopen = () => {
 // observation: when connecting in the middle of vote, i'm receiving 2 state updates, one without remaining time
 // also receiving 2 update_choices calls when connecting admist vote
 
-// make result look good
+// done : make result look good
 //                 result, idle , voting
 // selectedChoice: null  , enabled , enabled
 
 // half-done: fix hand position when voting (better but not perfect)
+// todo: when times up and user has not voted, clear selection indicator and vote btn
+// weird glitch where if use refreshes admist inf time vote, a timer is sent,
+// but if they refresh again after timer runs out, no timer shows
 
 
 ws.onclose = () => {
@@ -74,8 +82,8 @@ ws.onmessage = (event) => {
                 const container = document.getElementById("buttons-container");
                 container.innerHTML = "Thank You for Voting!"
             }  else {
-                if (selectedChoice != null && !voted){
-                    console.log("we reached the desired blocks")
+                if (selectedChoice != null && !voted){ // shows the vote btn
+                    // console.log("we reached the desired blocks")
                     document.getElementById("vote-btn").style.display = "block";
                 }
             }
@@ -101,7 +109,7 @@ ws.onmessage = (event) => {
     }
 
     // Handle voting alert and start countdown
-    if (msg.type === "alert" && msg.remainingTime) { // voting
+    if (msg.type === "alert") { // voting
         if (selectedChoice != null && !voted){
             console.log("we reached the desired blocks")
             document.getElementById("vote-btn").style.display = "block";
@@ -109,26 +117,50 @@ ws.onmessage = (event) => {
             selectionIndicator.style.left = `${selectedButton.offsetLeft - 40}px`; // when vote is called, no state update just this
         }
         console.log("voting1")
-        startCountdown(msg.remainingTime);
+        if (msg.remainingTime != ''){ // with countdown
+
+            startCountdown(msg.remainingTime);
+        } else {// no countdow
+
+        }
         voting = true;
     }
+
+    // if (msg.remainingTime){
+    //     console.log("remaing time is", msg.remainingTime);
+    //     if (msg.remainingTime){
+    //         console.log("inner if loop is true");
+    //     } else {
+    //         console.log("inner if loop is false");
+    //     }
+    // }
+
+    //todo: if receiving stop vote, stop timer
+
 
     if (msg.type === "state_update" && msg.remainingTime) { //displays timer when connecting during vote
         console.log("voting2")
         startCountdown(msg.remainingTime);
     }
 
-    if (msg.type === "send_results") {
-        document.getElementById("vote-btn").style.display = "none";
-        // document.getElementById("pointer").style.display = "none";
-        if (selectionIndicator){
-            selectionIndicator.style.display = "none";
+    if (msg.type == "stop_vote"){
+        console.log("vote stopped by admin")
+        console.log('voting has ended');
+            // countdownElement.textContent = "Voting has ended.";
+        document.getElementById("buttons-container").innerHTML = ""; // potential issue of this erasing the winning buttons
+    }
+
+    if (msg.type === "send_results") { // show results
+
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            // console.log("Countdown stopped externally.");
         }
-        selectedChoice = null;
-        selectedButton = null;
         updateResults(msg.result);
         voting = false;
     }
+
+    
 
     
 };
@@ -149,7 +181,17 @@ function startPingPong() {
 }
 
 function updateResults(results) {
-    const resultsText = document.getElementById("countdown");
+
+    
+    document.getElementById("vote-btn").style.display = "none";
+        // document.getElementById("pointer").style.display = "none";
+    if (selectionIndicator){
+        selectionIndicator.style.display = "none";
+    }
+    selectedChoice = null;
+    selectedButton = null;
+    
+    const resultsText = document.getElementById("countdown"); 
     const buttons_container = document.getElementById("buttons-container");
     buttons_container.innerHTML = ""
 
@@ -157,15 +199,69 @@ function updateResults(results) {
     if (results.length === 0) {
         resultsText.textContent = "No results yet.";
         return;
+    } else {
+        resultsText.textContent = "";
     }
 
     // Convert results to a single string
-    const resultString = results.map(result => `${result.choice}: ${result.count} votes`).join(" | ");
+    // const resultString = results.map(result => `${result.choice}: ${result.count} votes`).join(" | ");
 
-    resultsText.textContent = resultString;
+    // resultsText.textContent = resultString;
+
+    top_count = 0;
+    top_choice = null;
+
+    results.forEach(result =>{
+        const button = document.createElement("button");
+        button.textContent = `${result.choice}: ${result.count} votes`
+        button.className = "choice-btn";
+        
+        if (result.count > top_count){
+            if (top_choice){
+                top_choice.className = "choice-btn";
+            }
+            top_count = result.count;
+            button.className = "win-btn";
+            top_choice = button;
+        }
+
+        // Click event for selecting
+        // button.onclick = () => selectChoice(button, choice.label);
+
+        buttons_container.appendChild(button);
+
+    })
+
+    if (top_choice){
+
+        crown.style.display = "block";
+        crown.style.top = `${top_choice.offsetTop-30}px`;
+        crown.style.left = `${top_choice.offsetLeft-25}px`;
+    }
+
+    // const countdownElement = document.getElementById("countdown");
+    // countdownElement.innerHTML = "";
+
+    // const container = document.getElementById("buttons-container");
+    // container.innerHTML = ""; // Clear existing buttons
+
+    // Create buttons
+    // choices.forEach(choice => {
+    //     if (choice.enabled && choice.label) {
+    //         const button = document.createElement("button");
+    //         button.textContent = choice.label;
+    //         button.classList.add("choice-btn");
+
+    //         // Click event for selecting
+    //         button.onclick = () => selectChoice(button, choice.label);
+
+    //         container.appendChild(button);
+    //     }
+    // });
 }
 
 function startCountdown(seconds) {
+    seconds = Math.floor(seconds); // Round down to nearest integer
     const countdownElement = document.getElementById("countdown");
     countdownElement.textContent = `Voting ends in: ${seconds} seconds`;
 
@@ -175,10 +271,15 @@ function startCountdown(seconds) {
         if (seconds > 0) {
             countdownElement.textContent = `Voting ends in: ${seconds} seconds`;
         } else {
+            countdownElement.textContent = `TIMES UP!`;
             clearInterval(countdownInterval);
             console.log('voting has ended');
             // countdownElement.textContent = "Voting has ended.";
-            document.getElementById("buttons-container").innerHTML = ""; // Remove buttons
+            document.getElementById("buttons-container").innerHTML = ""; // potential issue of this erasing the winning buttons
+            document.getElementById("vote-btn").style.display = "none";
+            if (selectionIndicator){
+                selectionIndicator.style.display = "none";
+            }
         }
     }, 1000);
 }
@@ -187,6 +288,7 @@ function startCountdown(seconds) {
 
 
 function updateButtons(choices) {
+    crown.style.display = "none";
     const countdownElement = document.getElementById("countdown");
     countdownElement.innerHTML = "";
 
@@ -240,6 +342,7 @@ function selectChoice(button, choiceLabel) {
 
 
 function sendChoice() {
+    
     document.getElementById("vote-btn").style.display = "none";
     document.getElementById("pointer").style.display = "none";
 
@@ -247,7 +350,7 @@ function sendChoice() {
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "vote", choice: selectedChoice }));
         console.log(`Sent choice: ${selectedChoice}`);
-        container.innerHTML = "Thank you for voting!"; // Clear existing buttons
+        container.innerHTML = "Thank You for Voting!"; // Clear existing buttons
     } else {
         console.error("WebSocket is not open.");
     }

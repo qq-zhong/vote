@@ -41,6 +41,21 @@ body {
     margin: 10px 0; /* Space between buttons */
 }
 
+.win-btn {
+    background-color: #ffae00;
+    color: white;
+    border: none;
+    padding: 15px 20px;
+    font-size: 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s;
+    width: 80%; /* Make buttons wider for better touch usability */
+    max-width: 300px; /* Prevent buttons from being too wide */
+    text-align: center;
+    margin: 10px 0; /* Space between buttons */
+}
+
 /* Hover effect */
 .choice-btn:hover {
     background-color: #0056b3;
@@ -58,6 +73,14 @@ body {
     position: absolute;
     left: -35px; /* Move left of button */
     animation: wiggle 0.5s infinite alternate; /* Wiggle effect */
+}
+
+#winner{
+    height: 50px;
+    width: auto;
+    position: absolute;
+    left: -35px; /* Move left of button */
+    display: none;
 }
 
 #vote-btn {
