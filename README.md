@@ -1,3 +1,4 @@
 # vote
-todo: make timer appear when connected during voted, if voted, so waiting isn't as boring
-get selection image
+user vote page and backend server code
+
+cast your vote at https://qq-zhong.github.io/vote/
