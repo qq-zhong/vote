@@ -4,6 +4,9 @@ const WebSocket = require("ws");
 const mysql = require("mysql");
 const { parse } = require("cookie");
 require("dotenv").config();
+const SECRET_ROLE = process.env.SECRET_ROLE;
+
+// todo: add timer for non super user, and add super user check
 
 // Load SSL Certificate
 const server = https.createServer({
@@ -57,37 +60,74 @@ handleDisconnect();
 // WebSocket Server using HTTPS
 const wss = new WebSocket.Server({ server });
 
-// const wss = new WebSocket.Server({
-//     server, // Refer to your HTTPS server
-//     handleProtocols: (protocols, request) => {
-//         // Allow only connections from your frontend domain
-//         const origin = request.headers.origin;
-//         const allowedOrigin = "https://your-frontend-url.com"; // Replace with your frontend URL
-
-//         // If the origin is allowed, return true, else return false
-//         return origin === allowedOrigin ? true : false;
-//     },
-//     verifyClient: (info, done) => {
-//         const origin = info.origin;
-//         const allowedOrigin = "https://your-frontend-url.com"; // Your frontend URL
-
-//         // Allow connection only if the origin matches your frontend
-//         if (origin === allowedOrigin) {
-//             done(true); // Allow connection
-//         } else {
-//             done(false, 403, "Forbidden");
-//         }
-//     }
-// });
-
 const submittedUsers = new Set();
 const votedUsers = new Set();
+
+var superUser = null;
+var userLoginTime = null;
+var isSuper = false;
 
 wss.on("connection", (ws, req) => {
     const ip = req.socket.remoteAddress;
     console.log(`User connected from IP: ${ip}`);
     const url = new URL(req.url, `https://${req.headers.host}`);
     var cookie = url.searchParams.get("cookie");
+    var role = url.searchParams.get("role");
+
+    //todo: ??
+    if (role === "admin") {
+        const currentTime = Date.now();
+
+        console.log("is admin")
+        if (!isSuper && (userLoginTime == null || currentTime - userLoginTime >= 60000)) { // check !isSuper and make sure either userLoginTime is null or time has passed
+            // If a super user exists and their session has expired, close the old connection
+            if (superUser) {
+                superUser.terminate();
+                console.log("superUser.termiante() called from admin tree");
+            }
+
+            // Assign new super user
+            superUser = ws;
+            userLoginTime = currentTime;
+            // isSuper = true;
+            console.log("New super user session started.");
+        } else {
+            console.log("due to constarint terminating conection");
+            ws.send(JSON.stringify({ type: "ack", message: "another user is using the server, try again later" }))
+            setTimeout(() =>{
+                ws.terminate();
+                return;
+            }, 100)
+        }
+    }
+
+    //todo: check if role guess is wrong, if so their cookie is added to balcklist for 30 seconds
+    if (role == SECRET_ROLE){ // kill current superUser session; no interrupt allowed 
+        ws.send(JSON.stringify({ type: "ack", message: "hello super user" }))
+        if (superUser) {
+            superUser.terminate(); // Forcefully close the last admin's connection
+            console.log("superUser.terminate() called from secret role tree");
+        }
+    
+        // Add a timeout to ensure the superUser connection cleanup happens first
+        setTimeout(() => {
+            superUser = ws; // Reassign superUser after cleanup
+            isSuper = true; // Set the new superUser flag
+            console.log("Super user session started.");
+        }, 100); // 100 ms timeout
+    }
+
+    if (role != SECRET_ROLE && role != "admin" && role != null){//
+        ws.terminate();
+        console.log("wrong guess");
+    }
+
+    if (role == null){
+        // console.log(cookie);
+        // add to list of voters
+    }
+
+    // console.log('visitor role is: ', role);
     
 
     const name = "userID";  // The name of the cookie you're looking for
@@ -108,6 +148,9 @@ wss.on("connection", (ws, req) => {
     } else {
         userID = getUserID(req);
     }
+
+    //at this point userID is certainly assigned
+    
     // console.log("cookie is null");
     ws.send(JSON.stringify({ system: true, userID }));
     userID = String(userID) //important, getUserId returns a number
@@ -116,7 +159,15 @@ wss.on("connection", (ws, req) => {
     
 
     ws.on("message", (data) => handleMessage(ws, data, userID));
-    ws.on("close", () => console.log("Client disconnected"));
+    ws.on("close", () => {
+        console.log("Client disconnected");
+    
+        if (ws === superUser) {
+            isSuper = false; // always reset
+            userLoginTime = null;
+            console.log("admin disconnected.");
+        }
+    });
 });
 
 function getUserID(req) {
